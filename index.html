@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Kasa — uçtan uca şifreli sohbet</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="theme-color" content="#0D1214">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Kasa">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<style>
+  :root{
+    --bg:#0D1214;
+    --surface:#151B1E;
+    --surface-2:#1C2327;
+    --line:#2A3237;
+    --text:#E4EAEC;
+    --muted:#7E8C91;
+    --accent:#49C6B5;
+    --accent-dim:#2E5551;
+    --warn:#E0A63C;
+    --danger:#D9695C;
+    --mono: "SF Mono", "Roboto Mono", Consolas, monospace;
+    --sans: -apple-system, "Segoe UI", Inter, Helvetica, Arial, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{height:100%;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:var(--sans);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    min-height:100vh;
+    padding:20px;
+  }
+  #app{width:100%;max-width:460px;}
+
+  .setupBanner{
+    background:#2A2117;
+    border:1px solid #4a3a1f;
+    color:#E0C070;
+    border-radius:10px;
+    padding:12px 14px;
+    font-size:12.5px;
+    line-height:1.55;
+    margin-bottom:14px;
+  }
+  .setupBanner code{background:#1C1710;padding:1px 5px;border-radius:4px;font-family:var(--mono);}
+
+  .card{
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:14px;
+    padding:32px 28px;
+  }
+  .lock-mark{
+    width:40px;height:40px;
+    border-radius:10px;
+    background:var(--accent-dim);
+    display:flex;align-items:center;justify-content:center;
+    margin-bottom:18px;
+  }
+  .lock-mark svg{width:20px;height:20px;stroke:var(--accent);}
+  h1{font-size:21px;font-weight:600;margin:0 0 6px 0;letter-spacing:-0.01em;}
+  .sub{color:var(--muted);font-size:14px;line-height:1.5;margin:0 0 26px 0;}
+  label{display:block;font-size:12.5px;color:var(--muted);margin:0 0 6px 2px;}
+  .field{margin-bottom:16px;}
+  input[type=text], input[type=password]{
+    width:100%;background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:11px 12px;font-size:14.5px;font-family:var(--sans);outline:none;
+    transition:border-color .15s;
+  }
+  input[type=text]:focus, input[type=password]:focus{border-color:var(--accent);}
+  .btn{
+    width:100%;background:var(--accent);color:#08201C;border:none;border-radius:9px;
+    padding:12px;font-size:14.5px;font-weight:600;cursor:pointer;margin-top:6px;
+    transition:filter .15s, transform .05s;
+  }
+  .btn:hover{filter:brightness(1.08);}
+  .btn:active{transform:scale(0.99);}
+  .btn:disabled{opacity:.5;cursor:default;}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--line);}
+  .btn-ghost:hover{color:var(--text);border-color:var(--muted);}
+  .notice{
+    margin-top:20px;padding:12px 13px;border-radius:9px;background:var(--surface-2);
+    border:1px solid var(--line);font-size:12.5px;color:var(--muted);line-height:1.55;
+  }
+  .notice b{color:var(--text);font-weight:600;}
+  .row{display:flex;gap:10px;}
+  .row > *{flex:1;}
+  .err{color:var(--danger);font-size:13px;margin-top:10px;min-height:0;}
+
+  #chatWrap{display:none;flex-direction:column;height:82vh;max-height:720px;}
+  .chat-header{
+    background:var(--surface);border:1px solid var(--line);border-radius:14px 14px 0 0;
+    padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+  }
+  .head-left{display:flex;align-items:center;gap:10px;min-width:0;}
+  .room-dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}
+  .room-dot.off{background:var(--muted);}
+  .head-title{font-size:14.5px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .head-sub{font-size:11.5px;color:var(--muted);font-family:var(--mono);letter-spacing:.02em;}
+  .icon-btn{
+    background:var(--surface-2);border:1px solid var(--line);color:var(--muted);
+    border-radius:8px;padding:7px 9px;font-size:12px;cursor:pointer;white-space:nowrap;
+  }
+  .icon-btn:hover{color:var(--text);}
+
+  #messages{
+    flex:1;overflow-y:auto;background:var(--bg);border-left:1px solid var(--line);
+    border-right:1px solid var(--line);padding:16px;display:flex;flex-direction:column;gap:10px;
+  }
+  .msg{max-width:78%;padding:9px 12px;border-radius:12px;font-size:14px;line-height:1.45;position:relative;}
+  .msg.me{align-self:flex-end;background:var(--accent-dim);color:#EAFBF8;border-bottom-right-radius:4px;}
+  .msg.them{align-self:flex-start;background:var(--surface-2);border:1px solid var(--line);border-bottom-left-radius:4px;}
+  .msg.sys{align-self:center;background:transparent;color:var(--muted);font-size:12px;text-align:center;max-width:90%;}
+  .msg.broken{border:1px dashed var(--danger);color:var(--danger);font-family:var(--mono);font-size:12.5px;}
+  .msg .meta{display:block;font-size:10.5px;opacity:.6;margin-top:4px;}
+  .msg .who{display:block;font-size:11px;font-weight:600;opacity:.75;margin-bottom:2px;}
+
+  .chat-footer{
+    background:var(--surface);border:1px solid var(--line);border-radius:0 0 14px 14px;
+    padding:12px;display:flex;gap:8px;
+  }
+  #msgInput{
+    flex:1;background:var(--surface-2);border:1px solid var(--line);color:var(--text);
+    border-radius:9px;padding:11px 12px;font-size:14.5px;font-family:var(--sans);outline:none;resize:none;
+  }
+  #msgInput:focus{border-color:var(--accent);}
+  #sendBtn{
+    background:var(--accent);color:#08201C;border:none;border-radius:9px;padding:0 18px;
+    font-weight:600;cursor:pointer;font-size:14px;
+  }
+  #sendBtn:disabled{opacity:.5;cursor:default;}
+  .empty-state{margin:auto;text-align:center;color:var(--muted);font-size:13px;padding:20px;}
+  ::-webkit-scrollbar{width:8px;}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;}
+</style>
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ================================================================
+       FIREBASE KURULUMU — bu bloğu kendi Firebase bilgilerinle doldur.
+       console.firebase.google.com üzerinden ücretsiz proje aç,
+       Realtime Database'i etkinleştir, "Project settings" > "Your apps"
+       kısmından bu 6 değeri kopyala.
+       ================================================================ -->
+  <script>
+    const firebaseConfig = {
+      apiKey: "BURAYA_API_KEY",
+      authDomain: "BURAYA_PROJE.firebaseapp.com",
+      databaseURL: "https://BURAYA_PROJE-default-rtdb.firebaseio.com",
+      projectId: "BURAYA_PROJE",
+      storageBucket: "BURAYA_PROJE.appspot.com",
+      messagingSenderId: "BURAYA_SENDER_ID",
+      appId: "BURAYA_APP_ID"
+    };
+  </script>
+
+  <div id="setupWarning" class="setupBanner" style="display:none;">
+    ⚠️ Firebase bilgileri girilmemiş. Dosyanın başındaki <code>firebaseConfig</code> alanını kendi Firebase proje bilgilerinle doldurup tekrar yükle. Alttaki kurulum notunda adımlar var.
+  </div>
+
+  <!-- LOGIN -->
+  <div id="loginCard" class="card">
+    <div class="lock-mark">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="4" y="11" width="16" height="9" rx="2"></rect>
+        <path d="M7 11V8a5 5 0 0 1 10 0v3"></path>
+      </svg>
+    </div>
+    <h1>Kasa</h1>
+    <p class="sub">Mesajlar cihazında şifrelenir, veritabanına sadece şifreli metin gider. Bu sayfanın linkini arkadaşınla paylaş, ikiniz de kendi telefonunuzdan açın; aynı oda kodu + şifreyle aynı sohbete bağlanırsınız.</p>
+
+    <div class="field">
+      <label for="roomInput">Oda kodu</label>
+      <div class="row">
+        <input type="text" id="roomInput" placeholder="örn. ayse-mehmet-2026" autocomplete="off">
+        <button type="button" class="btn-ghost" id="genRoomBtn" style="flex:0 0 auto;padding:0 14px;border-radius:9px;">Üret</button>
+      </div>
+    </div>
+    <div class="field">
+      <label for="nickInput">Rumuzun</label>
+      <input type="text" id="nickInput" placeholder="örn. Ayşe" autocomplete="off">
+    </div>
+    <div class="field">
+      <label for="passInput">Şifre</label>
+      <input type="password" id="passInput" placeholder="Sadece ikinizin bildiği şifre" autocomplete="off">
+    </div>
+
+    <button class="btn" id="enterBtn">Odaya gir</button>
+    <div class="err" id="loginErr"></div>
+
+    <div class="notice">
+      <b>Nasıl çalışır:</b> Şifreni hiçbir yere kaydetmiyoruz; sekmeyi kapattığında hafızadan silinir. Şifre yanlışsa mesajlar okunmaz, bozuk veri görünür. Şifreleme AES-256-GCM, anahtar üretimi PBKDF2 (150.000 tur).<br><br>
+      <b>Uygulama olarak kur:</b> Android'de Chrome menüsünden "Ana ekrana ekle", iOS'ta Safari paylaş menüsünden "Ana Ekrana Ekle" ile simgeli, tam ekran açılan bir uygulama gibi kullanabilirsin.<br><br>
+      <b>Bildirim sınırı:</b> Odaya girince izin isteyecek. Uygulama açıkken veya yeni arka plana alındığında bildirim gösterir; telefon kilitliyken ya da uygulama uzun süre kapalıyken (gerçek push altyapısı olmadığı için) bildirim gelmez — o mesajları açtığında göreceksin.<br><br>
+      <b>Sınır:</b> "Kırılamaz" diye bir şey yok; AES-256'nın bugün pratikte kırılamayacak gücüne dayanıyoruz. Şifreyi güvensiz bir kanaldan paylaşırsan koruma anlamsızlaşır.
+    </div>
+  </div>
+
+  <!-- CHAT -->
+  <div id="chatWrap">
+    <div class="chat-header">
+      <div class="head-left">
+        <div class="room-dot" id="roomDot"></div>
+        <div style="min-width:0;">
+          <div class="head-title" id="roomTitle">oda</div>
+          <div class="head-sub" id="fingerprint">doğrulama kodu hesaplanıyor…</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:6px;">
+        <button class="icon-btn" id="lockBtn">🔒 Ayrıl</button>
+        <button class="icon-btn" id="clearBtn" style="color:var(--danger);border-color:#4a2c28;">Odayı Bitir</button>
+      </div>
+    </div>
+    <div id="messages">
+      <div class="empty-state" id="emptyState">Henüz mesaj yok. İlk mesajı gönder.</div>
+    </div>
+    <div class="chat-footer">
+      <textarea id="msgInput" rows="1" placeholder="Mesaj yaz…"></textarea>
+      <button id="sendBtn">Gönder</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+(function(){
+  // ---------- PWA install support ----------
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => {});
+    });
+  }
+
+  // ---------- Firebase ----------
+  const configFilledIn = !Object.values(firebaseConfig).some(v => String(v).includes('BURAYA'));
+  if(!configFilledIn){
+    document.getElementById('setupWarning').style.display = 'block';
+    document.getElementById('enterBtn').disabled = true;
+  } else {
+    firebase.initializeApp(firebaseConfig);
+  }
+  let db = configFilledIn ? firebase.database() : null;
+
+  // ---------- Crypto helpers ----------
+  const enc = new TextEncoder();
+  const dec = new TextDecoder();
+
+  function b64(bytes){
+    let bin = '';
+    const arr = new Uint8Array(bytes);
+    for (let i=0;i<arr.length;i++) bin += String.fromCharCode(arr[i]);
+    return btoa(bin);
+  }
+  function unb64(str){
+    const bin = atob(str);
+    const arr = new Uint8Array(bin.length);
+    for (let i=0;i<bin.length;i++) arr[i] = bin.charCodeAt(i);
+    return arr;
+  }
+  async function sha256Hex(str){
+    const buf = await crypto.subtle.digest('SHA-256', enc.encode(str));
+    return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  function hexToBytes(hex){
+    const bytes = new Uint8Array(hex.length / 2);
+    for (let i=0; i<bytes.length; i++) bytes[i] = parseInt(hex.substr(i*2, 2), 16);
+    return bytes;
+  }
+  // Firebase keys can't contain . $ # [ ] / — room ids are hashed anyway so this is moot,
+  // but keep helper in case you ever key by raw strings.
+  function safeKey(str){ return str.replace(/[.#$\[\]\/]/g, '_'); }
+
+  async function deriveKey(password, roomId){
+    const saltHex = (await sha256Hex('kasa-salt::' + roomId)).slice(0, 32);
+    const saltBytes = hexToBytes(saltHex);
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw', enc.encode(password), {name:'PBKDF2'}, false, ['deriveKey','deriveBits']
+    );
+    return crypto.subtle.deriveKey(
+      {name:'PBKDF2', salt: saltBytes, iterations: 150000, hash:'SHA-256'},
+      keyMaterial,
+      {name:'AES-GCM', length:256},
+      true,
+      ['encrypt','decrypt']
+    );
+  }
+
+  async function fingerprintOf(key){
+    const raw = await crypto.subtle.exportKey('raw', key);
+    const hex = await sha256Hex(b64(raw));
+    const short = hex.slice(0,16).toUpperCase();
+    return short.match(/.{1,4}/g).join('-');
+  }
+
+  async function encryptPayload(key, obj){
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const ct = await crypto.subtle.encrypt({name:'AES-GCM', iv}, key, enc.encode(JSON.stringify(obj)));
+    const combined = new Uint8Array(iv.length + ct.byteLength);
+    combined.set(iv, 0);
+    combined.set(new Uint8Array(ct), iv.length);
+    return b64(combined);
+  }
+
+  async function decryptPayload(key, b64str){
+    const combined = unb64(b64str);
+    const iv = combined.slice(0,12);
+    const ct = combined.slice(12);
+    const plain = await crypto.subtle.decrypt({name:'AES-GCM', iv}, key, ct);
+    return JSON.parse(dec.decode(plain));
+  }
+
+  // ---------- State ----------
+  let sessionKey = null;
+  let nickname = null;
+  let roomRef = null;
+  let messagesRef = null;
+  let closedRef = null;
+  let roomEnded = false;
+  let unreadCount = 0;
+
+  // ---------- App icon badge (Android supports this; iOS does not) ----------
+  function setBadge(n){
+    if (!('setAppBadge' in navigator)) return;
+    try{
+      if (n > 0) navigator.setAppBadge(n).catch(()=>{});
+      else navigator.clearAppBadge().catch(()=>{});
+    }catch(e){ /* badging not available on this platform, ignore */ }
+  }
+  function markRead(){
+    unreadCount = 0;
+    setBadge(0);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) markRead();
+  });
+  window.addEventListener('focus', markRead);
+
+  // ---------- DOM ----------
+  const loginCard = document.getElementById('loginCard');
+  const chatWrap = document.getElementById('chatWrap');
+  const roomInput = document.getElementById('roomInput');
+  const nickInput = document.getElementById('nickInput');
+  const passInput = document.getElementById('passInput');
+  const enterBtn = document.getElementById('enterBtn');
+  const loginErr = document.getElementById('loginErr');
+  const roomTitle = document.getElementById('roomTitle');
+  const roomDot = document.getElementById('roomDot');
+  const fingerprintEl = document.getElementById('fingerprint');
+  const messagesEl = document.getElementById('messages');
+  const emptyState = document.getElementById('emptyState');
+  const msgInput = document.getElementById('msgInput');
+  const sendBtn = document.getElementById('sendBtn');
+  const lockBtn = document.getElementById('lockBtn');
+  const clearBtn = document.getElementById('clearBtn');
+
+  [roomInput, nickInput, passInput].forEach(el=>{
+    el.addEventListener('keydown', e=>{ if(e.key==='Enter') enterBtn.click(); });
+  });
+
+  document.getElementById('genRoomBtn').addEventListener('click', ()=>{
+    const words = ['orman','deniz','kayak','nehir','çadır','harita','fener','yıldız','kum','rüzgar'];
+    const w = words[Math.floor(Math.random()*words.length)];
+    const n = Math.floor(1000 + Math.random()*9000);
+    roomInput.value = w + '-' + n;
+  });
+
+  enterBtn.addEventListener('click', async ()=>{
+    loginErr.textContent = '';
+    if(!db){ loginErr.textContent = 'Firebase ayarlanmamış — dosyanın başındaki firebaseConfig alanını doldur.'; return; }
+    const room = roomInput.value.trim();
+    const nick = nickInput.value.trim();
+    const pass = passInput.value;
+    if(!room || !nick || !pass){
+      loginErr.textContent = 'Oda kodu, rumuz ve şifre gerekli.';
+      return;
+    }
+    enterBtn.disabled = true;
+    enterBtn.textContent = 'Bağlanılıyor…';
+    try{
+      const roomHash = (await sha256Hex(room)).slice(0,24);
+      roomRef = db.ref('rooms/' + roomHash);
+      messagesRef = roomRef.child('messages');
+      closedRef = roomRef.child('closed');
+
+      const closedSnap = await closedRef.once('value');
+      if(closedSnap.val()){
+        loginErr.textContent = 'Bu oda daha önce sonlandırıldı. Yeni bir oda kodu üretip tekrar deneyin.';
+        enterBtn.disabled = false;
+        enterBtn.textContent = 'Odaya gir';
+        return;
+      }
+
+      sessionKey = await deriveKey(pass, room);
+      nickname = nick;
+      const fp = await fingerprintOf(sessionKey);
+      roomTitle.textContent = room;
+      fingerprintEl.textContent = 'Doğrulama kodu: ' + fp;
+      loginCard.style.display = 'none';
+      chatWrap.style.display = 'flex';
+
+      if ('Notification' in window && Notification.permission === 'default') {
+        try{ await Notification.requestPermission(); }catch(e){}
+      }
+
+      attachListeners();
+      msgInput.focus();
+    }catch(e){
+      loginErr.textContent = 'Bir şeyler ters gitti: ' + e.message;
+    }finally{
+      enterBtn.disabled = false;
+      enterBtn.textContent = 'Odaya gir';
+    }
+  });
+
+  function bubble(node){
+    messagesEl.appendChild(node);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+  }
+
+  function renderMessage(plain, ts, broken){
+    const wrap = document.createElement('div');
+    if(broken){
+      wrap.className = 'msg broken';
+      wrap.textContent = '🔒 Bu mesaj çözülemedi (yanlış şifre veya bozuk veri)';
+      return wrap;
+    }
+    const mine = plain.sender === nickname;
+    wrap.className = 'msg ' + (mine ? 'me' : 'them');
+    const who = document.createElement('span');
+    who.className = 'who';
+    who.textContent = mine ? 'Sen' : plain.sender;
+    const body = document.createElement('div');
+    body.textContent = plain.text;
+    const meta = document.createElement('span');
+    meta.className = 'meta';
+    meta.textContent = new Date(ts).toLocaleTimeString('tr-TR', {hour:'2-digit', minute:'2-digit'});
+    wrap.appendChild(who);
+    wrap.appendChild(body);
+    wrap.appendChild(meta);
+    return wrap;
+  }
+
+  async function renderIncoming(val, notify){
+    try{
+      const plain = await decryptPayload(sessionKey, val.ct);
+      bubble(renderMessage(plain, val.ts, false));
+      if (notify && plain.sender !== nickname) {
+        if (document.hidden) {
+          unreadCount += 1;
+          setBadge(unreadCount);
+        }
+        if ('Notification' in window && Notification.permission === 'granted') {
+          try{
+            const n = new Notification(plain.sender, { body: plain.text, icon: 'icon-192.png', tag: 'kasa-msg' });
+            n.onclick = () => { window.focus(); n.close(); };
+          }catch(e){ /* notifications not available right now — message still shows in chat */ }
+        }
+      }
+    }catch(e){
+      bubble(renderMessage(null, val.ts, true));
+    }
+  }
+
+  async function attachListeners(){
+    const snap = await messagesRef.once('value');
+    const initial = [];
+    snap.forEach((child) => { initial.push({key: child.key, val: child.val()}); });
+    initial.sort((a,b) => a.val.ts - b.val.ts);
+
+    const knownKeys = new Set();
+    for (const item of initial) {
+      knownKeys.add(item.key);
+      await renderIncoming(item.val, false);
+    }
+    if (initial.length > 0) emptyState.style.display = 'none';
+
+    // Realtime: fires for every future new message.
+    messagesRef.on('child_added', (snap2) => {
+      if (roomEnded || knownKeys.has(snap2.key)) return;
+      knownKeys.add(snap2.key);
+      emptyState.style.display = 'none';
+      renderIncoming(snap2.val(), true);
+    });
+
+    closedRef.on('value', (snap3)=>{
+      if (snap3.val() && !roomEnded) {
+        roomEnded = true;
+        roomDot.classList.add('off');
+        const sys = document.createElement('div');
+        sys.className = 'msg sys';
+        sys.textContent = 'Bu oda sonlandırıldı ve mesajlar silindi. Sohbete devam etmek için yeni bir oda açın.';
+        bubble(sys);
+        msgInput.disabled = true;
+        sendBtn.disabled = true;
+        messagesRef.off();
+      }
+    });
+  }
+
+  async function sendMessage(){
+    const text = msgInput.value.trim();
+    if(!text || roomEnded) return;
+    sendBtn.disabled = true;
+    try{
+      const ct = await encryptPayload(sessionKey, {sender: nickname, text: text});
+      await messagesRef.push({ts: Date.now(), ct: ct});
+      msgInput.value = '';
+    }catch(e){
+      alert('Mesaj gönderilemedi: ' + e.message);
+    }finally{
+      sendBtn.disabled = false;
+      msgInput.focus();
+    }
+  }
+
+  sendBtn.addEventListener('click', sendMessage);
+  msgInput.addEventListener('keydown', e=>{
+    if(e.key==='Enter' && !e.shiftKey){
+      e.preventDefault();
+      sendMessage();
+    }
+  });
+
+  lockBtn.addEventListener('click', ()=>{
+    markRead();
+    if(messagesRef) messagesRef.off();
+    if(closedRef) closedRef.off();
+    sessionKey = null;
+    nickname = null;
+    roomRef = null; messagesRef = null; closedRef = null;
+    roomEnded = false;
+    roomDot.classList.remove('off');
+    messagesEl.innerHTML = '';
+    messagesEl.appendChild(emptyState);
+    emptyState.style.display = 'block';
+    msgInput.value = '';
+    msgInput.disabled = false;
+    sendBtn.disabled = false;
+    clearBtn.disabled = false;
+    passInput.value = '';
+    chatWrap.style.display = 'none';
+    loginCard.style.display = 'block';
+  });
+
+  clearBtn.addEventListener('click', async ()=>{
+    if(!confirm('Oda kalıcı olarak sonlandırılsın mı? Mesajlar silinir ve bu oda kodu bir daha kullanılamaz — arkadaşının ekranı da kilitlenir.')) return;
+    clearBtn.disabled = true;
+    try{
+      await closedRef.set(true);
+      await messagesRef.remove();
+    }catch(e){
+      alert('Oda sonlandırılırken bir sorun oluştu: ' + e.message);
+    }
+    lockBtn.click();
+  });
+})();
+</script>
+</body>
+</html>
